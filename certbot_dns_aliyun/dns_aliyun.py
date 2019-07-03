@@ -1,4 +1,4 @@
-#-*- coding:utf-8 -*-
+# -*- coding:utf-8 -*-
 """
     DNS Authenticator for Aliyun
 """
@@ -10,6 +10,24 @@ from certbot import interfaces
 from certbot.plugins import dns_common
 
 LOGGER = logging.getLogger(__name__)
+
+domain_end = [".com.cn", ".net.cn", ".com", ".net", ".cn"]
+
+
+def get_domain(domain):
+    for i in domain_end:
+        if domain.endswith(i):
+            return "{}{}".format(domain.replace(i, "").split(".")[-1], i)
+    raise NoDomain("can not find domain {}".format(domain))
+
+
+class NoDomain(Exception):
+    def __init__(self, ErrorInfo):
+        super().__init__(self)
+        self.errorinfo = ErrorInfo
+
+    def __str__(self):
+        return self.errorinfo
 
 
 @zope.interface.implementer(interfaces.IAuthenticator)
@@ -45,13 +63,16 @@ class Authenticator(dns_common.DNSAuthenticator):
         dns_common.validate_file_permissions(self.conf("credentials"))
 
     def _perform(self, domain_name, record_name, record_value):
+        domain_name = get_domain(domain_name)
         self._get_aliyundns_client().add_txt_record(domain_name, record_name, record_value)
 
     def _cleanup(self, domain_name, record_name, record_value):
+        domain_name = get_domain(domain_name)
         self._get_aliyundns_client().delete_txt_record(domain_name, record_name, record_value)
 
     def _get_aliyundns_client(self):
         return _AliyunDnsClient(self.conf("credentials"))
+
 
 TTL = 600
 PAGE_SIZE = 100
@@ -71,8 +92,8 @@ class _AliyunDnsClient():
                 self._access_key, self._access_secret = json.loads(json_content)["access_key"], \
                                                         json.loads(json_content)["access_secret"]
                 self._client = client.AcsClient(self._access_key, \
-                                               self._access_secret, \
-                                               DEFAULT_REGION)
+                                                self._access_secret, \
+                                                DEFAULT_REGION)
         except IOError:
             LOGGER.error("Aliyun access secret file: %s not found.", secret_key_path)
         except Exception as error:
@@ -93,8 +114,8 @@ class _AliyunDnsClient():
         request.set_RR(record_name)
         request.set_Value(record_value)
         request.set_TTL(TTL)
-        LOGGER.info("domain_name: %s, record_name: %s, record_value: %s.",\
-                domain_name, record_name, record_value)
+        LOGGER.info("domain_name: %s, record_name: %s, record_value: %s.", \
+                    domain_name, record_name, record_value)
         result = json.loads(self._client.do_action_with_exception(request))
         LOGGER.info("add result: %s.", result)
 
@@ -103,7 +124,7 @@ class _AliyunDnsClient():
         : delete TXT domain record for authentication;
         """
         from aliyunsdkalidns.request.v20150109 \
-        import DescribeDomainRecordsRequest, DeleteDomainRecordRequest
+            import DescribeDomainRecordsRequest, DeleteDomainRecordRequest
 
         # describe request for dns record id
         record_id = None
@@ -125,25 +146,25 @@ class _AliyunDnsClient():
             result = record_first_page_result["DomainRecords"]["Record"]
             for record in result:
                 if record["Type"] == "TXT" and \
-                   record["RR"] == record_name and \
-                   record["Value"] == record_value and \
-                   record["DomainName"] == domain_name:
+                        record["RR"] == record_name and \
+                        record["Value"] == record_value and \
+                        record["DomainName"] == domain_name:
                     record_id = record["RecordId"]
-                    LOGGER.info("Delete record %s %s-%s, record Id: %s.",\
-                        record_name, domain_name, record["Value"], record_id)
+                    LOGGER.info("Delete record %s %s-%s, record Id: %s.", \
+                                record_name, domain_name, record["Value"], record_id)
         else:
             page_num = (total_record_count / PAGE_SIZE) if total_record_count % PAGE_SIZE == 0 \
-                       else (int(total_record_count/PAGE_SIZE) + 1)
+                else (int(total_record_count / PAGE_SIZE) + 1)
             for page in range(2, page_num + 1):
                 des_request.set_PageNumber(page)
                 result = json.loads(self._client.do_action_with_exception(des_request))
                 for record in result:
                     if record["Type"] == "TXT" and \
-                       record["RR"] == record_name and \
-                       record["DomainName"] == domain_name:
+                            record["RR"] == record_name and \
+                            record["DomainName"] == domain_name:
                         record_id = record["RecordId"]
-                        LOGGER.info("Delete record %s %s-%s, record Id: %s.",\
-                            record_name, domain_name, record["Value"], record_id)
+                        LOGGER.info("Delete record %s %s-%s, record Id: %s.", \
+                                    record_name, domain_name, record["Value"], record_id)
                         break
         LOGGER.info("record id: {}.".format(record_id))
         # no record Id no delete operation.
