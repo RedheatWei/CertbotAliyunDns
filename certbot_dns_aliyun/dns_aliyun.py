@@ -11,7 +11,8 @@ from certbot.plugins import dns_common
 
 LOGGER = logging.getLogger(__name__)
 
-domain_end = [".com.cn", ".net.cn", ".com", ".net", ".cn"]
+domain_end = [".com.cn", ".net.cn", ".org.cn", "gov.cn", ".com", ".net", ".cn", ".info", ".top", ".vip", ".ltd", ".xin",
+              ".shop", ".site", ".tech", ".cloud", "cc", ".me", ".link", ".org", ".gov", ".tv", ".live"]
 
 
 def get_domain(domain):
